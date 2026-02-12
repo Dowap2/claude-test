@@ -48,6 +48,8 @@ async function readStream(response: Response): Promise<string> {
 describe("POST /api/review", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // 기본적으로 API 키가 있는 상태로 설정
+    vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
   });
 
   it("code가 없으면 400을 반환한다", async () => {
@@ -111,5 +113,33 @@ describe("POST /api/review", () => {
 
     expect(res.status).toBe(500);
     expect(data.error).toBe("코드 리뷰 중 오류가 발생했습니다.");
+  });
+
+  describe("데모 모드 (API 키 없음)", () => {
+    beforeEach(() => {
+      vi.stubEnv("ANTHROPIC_API_KEY", "");
+    });
+
+    it("API 키가 없으면 데모 리뷰를 반환한다", async () => {
+      const res = await POST(
+        makeRequest({ code: "const x = 1;", language: "JavaScript" }),
+      );
+
+      expect(res.status).toBe(200);
+      const text = await readStream(res);
+
+      expect(text).toContain("데모 모드");
+      expect(text).toContain("ANTHROPIC_API_KEY");
+      expect(text).toContain("JavaScript");
+      expect(mockStream).not.toHaveBeenCalled();
+    });
+
+    it("데모 리뷰에 코드 줄 수가 포함된다", async () => {
+      const code = "line1\nline2\nline3";
+      const res = await POST(makeRequest({ code, language: "Python" }));
+      const text = await readStream(res);
+
+      expect(text).toContain("3줄");
+    });
   });
 });
