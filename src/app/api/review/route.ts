@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const message = await client.messages.create({
+    const stream = client.messages.stream({
       model: "claude-sonnet-4-5-20250929",
       max_tokens: 2048,
       messages: [
@@ -36,12 +36,28 @@ ${code}
       ],
     });
 
-    const textBlock = message.content.find((block) => block.type === "text");
-    const review = textBlock
-      ? textBlock.text
-      : "리뷰 결과를 생성할 수 없습니다.";
+    const encoder = new TextEncoder();
+    const readable = new ReadableStream({
+      async start(controller) {
+        stream.on("text", (text) => {
+          controller.enqueue(encoder.encode(text));
+        });
+        stream.on("error", (error) => {
+          console.error("Claude API stream error:", error);
+          controller.error(error);
+        });
+        stream.on("end", () => {
+          controller.close();
+        });
+      },
+    });
 
-    return NextResponse.json({ review });
+    return new Response(readable, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Transfer-Encoding": "chunked",
+      },
+    });
   } catch (error) {
     console.error("Claude API error:", error);
     return NextResponse.json(

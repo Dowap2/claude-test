@@ -23,12 +23,19 @@ export default function Home() {
         body: JSON.stringify({ code, language }),
       });
 
-      const data = await res.json();
-
       if (!res.ok) {
+        const data = await res.json();
         setError(data.error || "오류가 발생했습니다.");
-      } else {
-        setReview(data.review);
+        return;
+      }
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        setReview((prev) => prev + decoder.decode(value, { stream: true }));
       }
     } catch {
       setError("서버와 통신 중 오류가 발생했습니다.");
